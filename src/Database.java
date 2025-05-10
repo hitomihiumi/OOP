@@ -1,23 +1,27 @@
-import java.sql.*;
-import java.util.ArrayList;
+import org.hibernate.Session;
+import org.hibernate.SessionFactory;
+import org.hibernate.Transaction;
+import org.hibernate.cfg.Configuration;
+
 import java.util.List;
 
 public class Database {
-    private static final String URL = "jdbc:sqlite:electricity.sqlite";
+    private static final SessionFactory sessionFactory;
 
     static {
-        try {
-            Class.forName("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-            throw new RuntimeException("Failed to load SQLite JDBC driver");
-        }
+        sessionFactory = new Configuration()
+                .configure("hibernate.cfg.xml")
+                .addAnnotatedClass(MonthlyData.class)
+                .buildSessionFactory();
     }
 
     public Database() {
-        try (Connection conn = DriverManager.getConnection(URL)) {
-            String create = """
+        try (Session session = sessionFactory.openSession()) {
+            Transaction transaction = session.beginTransaction();
+            session.createNativeQuery("DROP TABLE IF EXISTS electricity").executeUpdate();
+            session.createNativeQuery("""
                 CREATE TABLE IF NOT EXISTS electricity (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     month TEXT NOT NULL,
                     year INTEGER NOT NULL,
                     previous REAL,
@@ -26,49 +30,25 @@ public class Database {
                     price REAL,
                     cost REAL
                 )
-            """;
-            conn.createStatement().execute(create);
-        } catch (SQLException e) {
-            e.printStackTrace();
+            """).executeUpdate();
+            transaction.commit();
         }
     }
 
     public List<MonthlyData> loadAll() {
-        List<MonthlyData> list = new ArrayList<>();
-        try (Connection conn = DriverManager.getConnection(URL)) {
-            ResultSet rs = conn.createStatement().executeQuery("SELECT * FROM electricity");
-            while (rs.next()) {
-                MonthlyData d = new MonthlyData(MonthEnum.valueOf(rs.getString("month")), rs.getInt("year"));
-                d.setPrevious(rs.getDouble("previous"));
-                d.setCurrent(rs.getDouble("current"));
-                d.setPrice(rs.getDouble("price"));
-                list.add(d);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
+        try (Session session = sessionFactory.openSession()) {
+            return session.createQuery("FROM MonthlyData", MonthlyData.class).list();
         }
-        return list;
     }
 
     public void saveAll(List<MonthlyData> dataList) {
-        try (Connection conn = DriverManager.getConnection(URL)) {
-            conn.createStatement().execute("DELETE FROM electricity");
-            String insert = "INSERT INTO electricity VALUES (?, ?, ?, ?, ?, ?, ?)";
-            try (PreparedStatement ps = conn.prepareStatement(insert)) {
-                for (MonthlyData d : dataList) {
-                    ps.setString(1, d.getMonth().name());
-                    ps.setInt(2, d.getYear());
-                    ps.setDouble(3, d.getPrevious());
-                    ps.setDouble(4, d.getCurrent());
-                    ps.setDouble(5, d.getUsed());
-                    ps.setDouble(6, d.getPrice());
-                    ps.setDouble(7, d.getCost());
-                    ps.addBatch();
-                }
-                ps.executeBatch();
+        try (Session session = sessionFactory.openSession()) {
+            Transaction transaction = session.beginTransaction();
+            session.createQuery("DELETE FROM MonthlyData").executeUpdate();
+            for (MonthlyData data : dataList) {
+                session.persist(data);
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
+            transaction.commit();
         }
     }
 }

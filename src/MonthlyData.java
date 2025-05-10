@@ -1,5 +1,15 @@
+import javax.persistence.*;
+
+@Entity
+@Table(name = "electricity")
 class MonthlyData {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Enumerated(EnumType.STRING)
     private MonthEnum month;
+
     private int year;
     private double previous;
     private double current;
@@ -7,10 +17,15 @@ class MonthlyData {
     private double price;
     private double cost;
 
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
     public MonthlyData(MonthEnum month, int year) {
         this.month = month;
         this.year = year;
+    }
+
+    public MonthlyData() {
     }
 
     public void setPrevious(double previous) {
@@ -26,6 +41,14 @@ class MonthlyData {
     public void setPrice(double price) {
         this.price = price;
         recalculate();
+    }
+
+    public void setMonth(MonthEnum month) {
+        this.month = month;
+    }
+
+    public void setYear(int year) {
+        this.year = year;
     }
 
     private void recalculate() {
